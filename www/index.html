@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Run Workspace</title>
+  <link id="css" rel="stylesheet" href="/css/bootstrap.min.css">
+  <script type="text/javascript" src="https://api.fmeserver.com/js/v1.1/FMEServer.js"></script>
+</head>
+<body class="bg-faded">
+  <div id="content" class="container-fluid">
+    <div class="row mx-auto" id="titel">
+      <div class="col-md-8 mx-auto mt-2 mb-2 mr-3 ml-2">
+        <h1 align="center">Run Workspace</h1>
+      </div>
+    </div>
+    <div id="auth" class="row mx-auto card card-block pr-5 pl-5 pt-3 pb-1 mr-1 mb-3 w-75">
+      <h4 class="card-title pb-2">Connect to FME Server</h4>
+      <form>
+        <div class="row form-group">
+          <div class="col-md-4">
+            <lable for="server_url">FME Server URL</lable>
+          </div>
+          <div class="col-md-8">
+            <input class= "form-control" id="server_url" type="text" name="server_url" value=""/>
+          </div>
+        </div>
+        <div class="row form-group">
+          <div class="col-md-4">
+            <lable for="token">FME Server Token</lable>
+          </div>
+          <div class="col-md-8">
+            <input class="form-control" id="token" type="text" name="token" value=""/>
+          </div>
+        </div>
+        <div class="row form-group">
+          <div class="col-md-8">
+            <button class="btn btn-primary" type="button" onclick="init()">Connect</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div id="ws_select" class="row mx-auto card card-block pr-5 pl-5 pt-3 pb-1 mr-1 mb-3 w-75">
+      <h4 class="card-title pb-2">Select Workspace</h4>
+      <form>
+        <div class="row form-group">
+          <div class="col-md-4">
+            <lable for="repositories">Respository</lable>
+          </div>
+          <div class="col-md-8">
+            <select class="form-control" id="repositories" onchange="getWorkspaces()"></select>
+          </div>
+        </div>
+        <div class="row form-group">
+          <div class="col-md-4">
+            <lable for="workspaces">Workspace</lable>
+          </div>
+          <div class="col-md-8">
+            <select class="form-control" id="workspaces" onchange="getServices()"></select>
+          </div>
+        </div>
+        <div class="row form-group">
+          <div class="col-md-4">
+            <lable for="service">Service</lable>
+          </div>
+          <div class="col-md-8">
+            <select class="form-control" id="services" onchange="setService()"></select>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div id="param" class="row mx-auto card card-block pr-5 pl-5 pt-3 pb-1 mr-1 mb-3 w-75">
+      <h4 class="card-title pb-2">Published Parameters</h4>
+      <form id="ws-parameters">
+      </form>
+    </div>
+    <div id="result" class="row mx-auto card card-block pr-5 pl-5 pt-3 pb-1 mr-1 mb-3 w-75">
+      <h4 class="card-title pb-2">Results</h4>
+      <div id = "response">
+        <p class="card-text"></p>
+      </div>
+    </div>
+    <div id="share" class="row mx-auto card card-block pr-5 pl-5 pt-3 pb-1 mr-1 mb-3 w-75">
+      <h4 class="card-title pb-2">Share your workspace</h4>
+      <div id= "style" class="row form-group">
+        <div class="col-md-4">
+          <lable for="url">Select style</lable>
+        </div>
+        <div class="col-md-8">
+          <select class="form-control "id="select_css" onchange="directURL()">
+            <option selected="true" disabled>---Choose your preffered Style---</option>
+            <option value="/css/bootstrap.min.css">Bootstrap 4</option>
+            <option disabled>---Bootswatch Styles---(https://bootswatch.com/)</option>
+          </select>
+        </div>
+      </div>
+      <div id= "url" class="row form-group">
+        <div class="col-md-4">
+          <lable for="url">Direct URL</lable>
+        </div>
+        <div class="col-md-8">
+          <a id="url_link" target="_blank"></a>
+        </div>
+      </div>
+      <div id "iframe" class="row form-group">
+        <div class="col-md-4">
+          <lable for="iframe">iFrame element</lable>
+        </div>
+        <div class="col-md-8">
+          <input class="form-control" id="iframe_element" type= "textarea"></input>
+        </div>
+      </div>
+      <div id "preview" class="row form-group">
+        <div class="col-md-4">
+          <lable for="iframe">iFrame preview</lable>
+        </div>
+        <div class="col-md-8">
+          <div id="iframe_preview" class="mx-auto">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+<script>
+
+var	server, token, repository, workspace, service, session, path, fileInput, files;
+var config = {};
+
+window.onload = function (){
+  var query = location.search;
+  var splitQuery = query.split('&')
+  for (i= 0; i < splitQuery.length; i++) {
+    element = splitQuery[i].split('=');
+    if (i == 0) {
+      element[0] = element[0].substr(1);
+    }
+    config[element[0]] = element[1];
+  }
+  if (config.style != undefined) {
+    document.getElementById('css').href = config.style;
+  }
+  if (!config.server || !config.token) {
+  }
+  else{
+    document.getElementById('server_url').value = config.server;
+    document.getElementById('token').value = config.token;
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('share').style.display = 'none';
+    if (!config.repo || !config.ws || !config.service) {
+      init();
+    }
+    else{
+      repository = config.repo;
+      workspace = config.ws;
+      service = config.service;
+      document.getElementById('ws_select').style.display = 'none';
+      init();
+    }
+  }
+}
+
+function init(){
+  server = document.getElementById('server_url').value;
+  token = document.getElementById('token').value;
+  FMEServer.init({
+    server : server,
+    token : token
+  });
+  var url = server + "/fmerest/v3/repositories";
+  FMEServer.customRequest(url,"GET", getRepositories);
+};
+
+function getRepositories(json){
+  if (repository == undefined){
+    var html = "";
+    for (var i = 0; i < json.items.length; i++) {
+      html += "<option value=" + i  + ">" +json.items[i].name + "</option>"
+    }
+    document.getElementById("repositories").innerHTML = html;
+    repository = document.getElementById('repositories');
+    repository = repository.options[repository.selectedIndex].text;
+  }
+  var url = server + "/fmerest/v3/repositories/" +  repository + "/items";
+  FMEServer.customRequest(url, "GET", getWorkspaces);
+};
+
+function getWorkspaces(json){
+  if (json !== undefined) {
+    var html = "";
+    for (var i = 0; i < json.items.length; i++) {
+      html += "<option value=" + i  + ">" +json.items[i].name + "</option>"
+    }
+    document.getElementById('workspaces').innerHTML = html;
+    if (config.ws == undefined) {
+      workspace = document.getElementById('workspaces');
+      workspace = workspace.options[workspace.selectedIndex].text;
+    }
+    else {
+      workspace = config.ws;
+    }
+    var url = server + "/fmerest/v3/repositories/" + repository + "/items/" + workspace + "/services";
+    FMEServer.customRequest(url, "GET", getServices);
+  }
+  else {
+    repository = document.getElementById('repositories');
+    repository = repository.options[repository.selectedIndex].text;
+    var url = server + "/fmerest/v3/repositories/" + repository + "/items";
+    FMEServer.customRequest(url, "GET", getWorkspaces);
+  }
+};
+
+function getServices(json){
+  if (json !== undefined) {
+    var html = "";
+    for(var i = 0; i < json.length; i++) {
+      html += "<option value=" + i  + ">" + json[i].displayName + "</option>"
+    }
+    document.getElementById('services').innerHTML = html;
+    FMEServer.getWorkspaceParameters( repository, workspace, populateForm);
+
+    function populateForm( json ) {
+      document.getElementById("ws-parameters").innerHTML = "";
+      FMEServer.generateFormItems( "ws-parameters", json );
+
+      modifyParams();
+
+      if (config.service == undefined){
+        setService();
+      }
+      else {
+        service = config.service;
+      }
+    }
+  }
+  else {
+    workspace = document.getElementById('workspaces');
+    workspace = workspace.options[workspace.selectedIndex].text;
+    var url = server + "/fmerest/v3/repositories/" + repository + "/items/" + workspace + "/services";
+    FMEServer.customRequest(url, "GET", getServices);
+  }
+};
+
+function setService() {
+  service = document.getElementById('services');
+  service = service.options[service.selectedIndex].text;
+  switch(service) {
+    case "Data Download":
+    service = "datadownload";
+    break;
+    case "Job Submitter":
+    service = "jobsubmitter";
+    break;
+    case "Data Streaming":
+    service = "datastreaming";
+  }
+  resetResults();
+};
+
+function modifyParams(){
+  var formElement = document.getElementsByClassName('fmes-form-component');
+  for ( var i = 0; i < formElement.length; i++) {
+    var div = document.createElement('div');
+    div.classList.add('row');
+    div.classList.add('form-group');
+    div.classList.add('fmes-form-component');
+    div.innerHTML = formElement[i].innerHTML;
+    div.childNodes[1].value = formElement[i].childNodes[1].value
+    formElement[i].parentNode.replaceChild(div,formElement[i]);
+  }
+  for (var i = 0; i < formElement.length; i++) {
+    var defaultValue = (formElement[i].childNodes[1].value);
+    for (var k = 0; k < formElement[i].childNodes.length; k++) {
+      var org_html = formElement[i].childNodes[k].outerHTML;
+      var new_html = "<div>" + org_html + "</div>";
+      formElement[i].childNodes[k].outerHTML = new_html;
+    }
+    formElement[i].childNodes[1].childNodes[0].value = defaultValue;
+  }
+  var paramElements = document.getElementById('ws-parameters');
+  selectElement = paramElements.getElementsByTagName('select');
+  labelElement = paramElements.getElementsByTagName('label');
+  inputElement = paramElements.getElementsByTagName('input');
+  for ( var i = 0; i < selectElement.length; i++) {
+    selectElement[i].classList.add("form-control");
+    selectElement[i].parentNode.classList.add("col-md-8");
+  }
+  for ( var i = 0; i < inputElement.length; i++) {
+    if (inputElement[i].type.toLowerCase() == 'checkbox') {
+      inputElement[i].parentNode.setAttribute("id","checkbox");
+      inputElement[i].parentNode.classList.add("form-control");
+      inputElement[i].parentNode.parentNode.classList.add("col-md-8");
+      inputElement[i].classList.add("col-md-1");
+    }
+    else{
+      inputElement[i].classList.add("form-control");
+      inputElement[i].parentNode.classList.add("col-md-8");
+    }
+  }
+  for ( var i = 0; i < labelElement.length; i++) {
+    if (labelElement[i].parentNode.getAttribute('id') == 'checkbox') {
+      labelElement[i].classList.add("col-md-11");
+    }
+    else {
+      labelElement[i].parentNode.classList.add("col-md-4");
+    }
+  }
+  var inputs = document.getElementById( "ws-parameters" ).getElementsByTagName( "input" );
+  var added = false;
+
+  for( var i in inputs ) {
+    if( inputs[i].type == "file" && added === false ){
+      fileInput = inputs[i];
+      function makeButton (name, func, color) {
+        var button = document.createElement( "input" );
+        button.type = "button";
+        button.value = name;
+        button.setAttribute( "onclick", func);
+        button.setAttribute( "class", "m-1 btn btn-" + color );
+        return button;
+      }
+      fileInput.parentNode.insertBefore( makeButton("Reset", "resetUploads();", "danger"), fileInput.nextSibling );
+      fileInput.parentNode.insertBefore( makeButton("Upload File", "uploadFile();", "success"), fileInput.nextSibling );
+      fileInput.setAttribute("id", "fileUpload")
+      var div = document.createElement("div");
+      div.setAttribute( "id", "fileList" );
+      div.setAttribute( "class", "m-1" );
+      fileInput.parentNode.insertBefore( div, fileInput.nextSibling );
+      added = true;
+      FMEServer.getSession( repository, workspace, setVars );
+    }
+  }
+  var form = document.getElementById("ws-parameters");
+  var buttonElement = document.createElement( "div" );
+  buttonElement.innerHTML = "<div class='col-md-8'><button class='btn btn-primary' type='button' onclick='run();'>Submit Job</button></div>";
+  buttonElement.setAttribute("class", "row form-group");
+  form.appendChild( buttonElement );
+}
+
+//------------------------------------------------------------------------
+//Creates a JSON object containing the workspace parameters (jobsubmitter)
+//------------------------------------------------------------------------
+
+function paramJSON() {
+  var form = document.getElementById('ws-parameters')
+  params = { "publishedParameters" : [] };
+  var publishedParameters = params.publishedParameters;
+  var checkboxes = {};
+  for( var i = 0; i < form.elements.length; i++ ){
+    var element = form.elements[i];
+    var obj = { "name" : "", "value" : null }
+    obj.name = element.name;
+    if( element.type == "select" ) {
+      obj.value = element[element.selectedIndex].value;
+      publishedParameters.push( obj );
+    } else if( element.type == "checkbox" ){
+      if( element.checked ) {
+        if( !checkboxes[element.name] ){
+          checkboxes[element.name] = [];
+        }
+        checkboxes[element.name].push( element.value );
+      }
+    } else if( element.type != "hidden" && element.type != "button" ) {
+      obj.value = element.value;
+      publishedParameters.push( obj );
+    }
+  }
+  for( name in checkboxes ) {
+    publishedParameters.push( { "name" : name, "value" : checkboxes[name] } );
+  }
+  return params;
+};
+
+//---------------------------------------------------------------------------------------------
+//Creates a URL encoded string containing the workspace parameters (datastreaming,datadownload)
+//---------------------------------------------------------------------------------------------
+
+function paramURLencod() {
+  var form = document.getElementById('ws-parameters')
+  params = "";
+  for( var i = 0; i < form.length; i++ ){
+    var element = form.elements[i];
+    if( element.type == "select" ) {
+      params += element.name+"="+element[element.selectedIndex].value+"&";
+    } else if( element.type == "checkbox" ){
+      if( element.checked ) {
+        params += element.name+"="+element.value+"&";
+      }
+    } else {
+      params += element.name+"="+element.value+"&";
+    }
+  }
+  params = params.substr( 0, params.length - 1 );
+  return params;
+};
+
+//---------------------------------------------------------
+//Runs the workspace with parameters and data if applicable
+//---------------------------------------------------------
+
+function run() {
+  resetResults();
+  var fileUpload = document.getElementById('fileUpload')
+  if (fileUpload != undefined){
+    if (files != undefined){
+      var params = {
+        filename : fileInput.name,
+        files : files,
+        service : "fme" + service,
+        params : processParams()
+      };
+      switch (service) {
+        case "datadownload":
+          showResult = showResultDownload;
+          break;
+        case "jobsubmitter":
+          showResult = showResultDownload;
+          break;
+        case "datastreaming":
+          showResult = showResultStream;
+          var url = server + '/fmedatastreaming/' + repository + '/' + workspace + '?' + 'opt_showresult=true&token=' + token + '&' + processParams() + '&' + fileInput.name +'=' + params.files[0].name;
+          window.open(url);
+          showResultStream();
+          return;
+      }
+      FMEServer.runWorkspaceWithData( path, params, showResult );
+      resetUploads();
+     } else {
+       alert( "No Files Uploaded.  Please upload a file." );
+     }
+  }
+  else {
+    if (service == "jobsubmitter") {
+      FMEServer.submitSyncJob( repository, workspace, paramJSON(), showResultSubmit );
+    }
+    else if (service == "datadownload") {
+      FMEServer.runDataDownload( repository, workspace, paramURLencod(), showResultDownload );
+    }
+    else if (service == "datastreaming") {
+      var url = server + '/fmedatastreaming/' + repository + '/' + workspace + '?' + 'opt_showresult=true&token=' + token + '&' + paramURLencod();
+      window.open(url);
+      showResultStream();
+    }
+  }
+};
+
+//----------------------------------------
+//How to display the results are displayed
+//----------------------------------------
+
+function showResultSubmit( json ) {
+  var div = document.getElementById("response");
+  var jobID = json.id;
+  var status = json.status;
+  div.setAttribute("class", "mb-2 card-text");
+  div.innerHTML = "<p>Job ID: "+jobID+ "</p><p>Status: "+status+"</p>";
+};
+
+function showResultDownload( json ) {
+  var div = document.getElementById("response");
+  var jobID = json.serviceResponse.jobID;
+  var status = json.serviceResponse.statusInfo.status;
+  div.setAttribute("class", "mb-2 card-text");
+  div.innerHTML = "<p>Job ID: "+jobID+ "</p><p>Status: "+status+"</p>";
+  if (json.serviceResponse.url != undefined){
+    var download = json.serviceResponse.url;
+    div.innerHTML += "<a href ="+download+" class='btn btn-primary'>Download Results</a>";
+  }
+};
+
+function showResultStream( json ) {
+  var div = document.getElementById("response");
+  div.setAttribute("class", "mb-2 card-text");
+  div.innerHTML = "Your result opened in a new window";
+};
+
+function resetResults(){
+  document.getElementById("response").innerHTML = "";
+}
+
+//------------------------------------
+//This section handles the file uplaod
+//------------------------------------
+
+function setVars( json ) {
+  if( json.serviceResponse.files ) {
+    session = json.serviceResponse.session;
+    path = json.serviceResponse.files.folder[0].path;
+  } else {
+    showResultDownload( json );
+  }
+}
+
+function uploadFile() {
+  FMEServer.dataUpload( repository, workspace, fileInput, session, processFiles );
+}
+
+function getFiles() {
+  FMEServer.getDataUploads( repository, workspace, session, processFiles );
+}
+
+function processFiles( json ) {
+  var list = document.getElementById( "fileList" );
+  if( json.serviceResponse != undefined ) {
+    list.innerHTML = "";
+    files = json.serviceResponse.files.file;
+    for( var file in files ){
+      list.innerHTML += "<p>"+files[file].name+", <em>"+files[file].size+" bytes</em></p>";
+    }
+  } else {
+    setTimeout("getFiles();", 2000);
+  }
+}
+
+function resetUploads() {
+  FMEServer.getSession( repository, workspace, setVars );
+  var fileList = document.getElementById( "fileList" );
+  files = undefined;
+  if (fileList != undefined){
+    fileList.innerHTML = "";
+    document.getElementById("fileUpload").value ="";
+  }
+}
+
+function processParams() {
+  var inputs = document.getElementById( "ws-parameters" ).getElementsByTagName( "input" );
+  var selects = document.getElementById( "ws-parameters" ).getElementsByTagName( "select" );
+  var options = [];
+  var properties = "";
+  inputs = Array.prototype.slice.call( inputs );
+  selects = Array.prototype.slice.call( selects );
+  options = inputs.concat( selects );
+  for( var opt in options ) {
+    var option = options[opt];
+    if( option.value && option.name != fileInput.name && option.type != "button" ) {
+      properties += option.name+"=";
+      if( option.type == "select" ) {
+        properties += option[ option.selectedIndex ].value;
+      } else {
+        properties += option.value;
+      }
+      properties += "&";
+    }
+  }
+  properties = properties.substr( 0, properties.length - 1 );
+  return properties;
+}
+
+//----------------------------------------------------------------------
+//Create the directURL for the form and an iFRrame element with prieview
+//----------------------------------------------------------------------
+
+var bs_url = "https://bootswatch.com/api/4.json";
+var xhttp = new XMLHttpRequest();
+xhttp.onreadystatechange = function() {
+  if (this.readyState == 4 && this.status == 200) {
+    var json = JSON.parse(this.responseText);
+    for (i=0; i < json.themes.length; i++){
+      var option = document.createElement("option");
+      option.value = json.themes[i].cssCdn;
+      option.text = json.themes[i].name;
+      document.getElementById('select_css').appendChild(option);
+    }
+  }
+};
+xhttp.open("GET", bs_url, true);
+xhttp.send();
+
+function directURL(){
+  var base = location.host;
+  if (location.path != undefined) {
+  var path = location.path;
+  }
+  else {
+    var path = "";
+  }
+  setService();
+  var style = document.getElementById('select_css').value;
+  var query = "?server=" + server + "&token=" + token + "&repo=" + repository + "&ws=" + workspace + "&service=" + service + "&style=" + style;
+  var direct_url = "http://" + base + path + query;
+  document.getElementById("url_link").setAttribute("href", encodeURI(direct_url));
+  document.getElementById("url_link").innerHTML = "<pre>" + direct_url + "</pre>";
+  document.getElementById("iframe_element").value = "<iframe seamless width='100%' height='500' src=" +direct_url + "></iframe>";
+  document.getElementById("iframe_preview").innerHTML = "<iframe seamless width='100%' height='500' src=" +direct_url + "></iframe>";
+};
+
+</script>
+</html>
